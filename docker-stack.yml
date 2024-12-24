@@ -2,15 +2,28 @@ services:
   api: 
     image: gopenux/flask-docker-swarm:latest
     environment:
-      DB_URL: "mongodb://database-network:27017/mydb"
+      DB_URL: "mongodb://root:password@database-network:27017/mydb"
     depends_on:
       - database
     ports:
       - "5000:5000"
     networks:
-      network-db:
+      network-db:  # Red solo para la API y la base de datos
         aliases:
           - api-network
+      network-nginx:  # Red para la API y Nginx
+        aliases:
+          - api-nginx
+    deploy:
+      replicas: 3
+      update_config:
+        parallelism: 2
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
 
   database:
     image: mongo:latest
@@ -18,12 +31,10 @@ services:
       - "27017:27017"
     environment:
       - MONGO_INITDB_DATABASE=mydb
-      - MONGO_INITDB_ROOT_USERNAME=root
-      - MONGO_INITDB_ROOT_PASSWORD=password
     volumes:
       - ./mongodb-data:/data/db
     networks:
-      network-db:
+      network-db:  # Red solo para la base de datos y la API
         aliases:
           - database-network
   
@@ -36,14 +47,13 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
       - ./nginx/certs:/etc/nginx/ssl
     networks:
-      conection:
+      network-nginx:  # Red solo para Nginx y la API
         aliases:
           - ingress-network
-       
-
+    
 
 networks:
   network-db:
-    driver: overlay
-  conection:  
-    driver: overlay
+    driver: overlay  # Red para la comunicación entre la API y la base de datos
+  network-nginx:
+    driver: overlay  # Red para la comunicación entre la API y Nginx
