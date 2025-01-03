@@ -2,58 +2,45 @@ services:
   api: 
     image: gopenux/flask-docker-swarm:latest
     environment:
-      DB_URL: "mongodb://root:password@database-network:27017/mydb"
-    depends_on:
-      - database
+      DB_URL: "mongodb://database-network:27017/mydb"
     ports:
       - "5000:5000"
+    depends_on:
+      - database
     networks:
-      network-db:  # Red solo para la API y la base de datos
-        aliases:
-          - api-network
-      network-nginx:  # Red para la API y Nginx
-        aliases:
-          - api-nginx
+      - network-db
+      - network-nginx
     deploy:
-      replicas: 3
-      update_config:
-        parallelism: 2
-        delay: 10s
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-        window: 120s
+      replicas: 1
+ 
 
   database:
     image: mongo:latest
-    ports:
-      - "27017:27017"
     environment:
       - MONGO_INITDB_DATABASE=mydb
     volumes:
-      - ./mongodb-data:/data/db
+      - ./dbmongo:/data/db  
     networks:
-      network-db:  # Red solo para la base de datos y la API
+      network-db:  
         aliases:
           - database-network
-  
+
   ingress:
     image: nginx:latest
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
       - ./nginx/certs:/etc/nginx/ssl
     networks:
-      network-nginx:  # Red solo para Nginx y la API
+      network-nginx:
         aliases:
-          - ingress-network
-    
+          - nginx-network 
 
 networks:
   network-db:
-    driver: overlay  # Red para la comunicación entre la API y la base de datos
+    driver: overlay  
   network-nginx:
-    driver: overlay  # Red para la comunicación entre la API y Nginx
+    driver: overlay  
+

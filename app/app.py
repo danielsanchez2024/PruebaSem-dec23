@@ -10,49 +10,57 @@ mongo = PyMongo(app)
 
 @app.route('/products', methods=['GET'])
 def get_products():
-    product = mongo.db.products.find()
-    return jsonify([{'id': str(product['_id']), 'nombre': product['nombre'], 'precio': product['precio']} for product in product])
+    products = mongo.db.products.find()
+    # Convertir ObjectId a string en la respuesta
+    return jsonify([{
+        'id': str(product['_id']),
+        'nombre': product['nombre'],
+        'precio': product['precio']
+    } for product in products])
 
 @app.route('/product', methods=['POST'])
 def create_product():
     data = request.json
+  
+    if isinstance(data, list): 
+        productos = data
+    elif isinstance(data, dict) and 'productos' in data and isinstance(data['productos'], list): 
+        productos = data['productos']
+    else: 
+        productos = [data]
 
-    # Verificar si 'productos' está presente y es una lista
-    if 'productos' not in data or not isinstance(data['productos'], list):
-        return jsonify({'error': 'Se debe proporcionar un array de productos'}), 400
+    ids_creados = []  
 
-    # Validar cada producto en la lista
-    for producto in data['productos']:
-        # Verificar si 'nombre' está presente en cada producto
+    for producto in productos:
         if 'nombre' not in producto:
-            return jsonify({'error': 'El nombre es requerido en todos los productos'}), 400
+            return jsonify({'error': 'The name is required for all products'}), 400
 
-        # Verificar si 'precio' está presente en cada producto
         if 'precio' not in producto:
-            return jsonify({'error': 'El precio es requerido en todos los productos'}), 400
+            return jsonify({'error': 'The price is required for all products'}), 400
 
-        # Intentar convertir el 'precio' a float y validar
         try:
-            precio = float(producto.get('precio'))  # Convertir a float
+            precio = float(producto['precio']) 
         except ValueError:
-            return jsonify({'error': 'El precio debe ser un número válido en todos los productos'}), 400
+            return jsonify({'error': 'The price must be a valid number for all products'}), 400
 
-        # Validar si el precio es positivo y entero
-        if precio < 0 or precio % 1 != 0:
-            return jsonify({'error': 'El precio debe ser un número entero positivo en todos los productos'}), 400
+        if precio <= 0:
+            return jsonify({'error': 'The price must be a positive number for all products'}), 400
+        if precio % 1 != 0: 
+            return jsonify({'error': 'The price must be a positive integer for all products'}), 400
 
-    # Insertar todos los productos en la base de datos
-    result = mongo.db.products.insert_many(data['productos'])
+        result = mongo.db.products.insert_one(producto)
+        ids_creados.append(str(result.inserted_id)) 
 
-    return jsonify({'message': 'Productos creados', 'ids': [str(id) for id in result.inserted_ids]}), 201
+    return jsonify({'message': 'Products created', 'ids': ids_creados}), 201
+
 
 @app.route('/products/<id>', methods=['GET'])
 def get_product(id):
     product = mongo.db.products.find_one({'_id': ObjectId(id)})
 
     if product:
-        product['id'] = str(product['_id'])  # Convertir ObjectId a string
-        product.pop('_id', None)  # Opcional: Eliminar el campo '_id' si no lo necesitas
+        product['id'] = str(product['_id'])
+        product.pop('_id', None)
         return jsonify(product), 200
     return jsonify({'error': 'Producto no encontrado'}), 404
 
@@ -71,17 +79,19 @@ def update_product(id):
     if 'precio' not in data:
         return jsonify({'error': 'precio es requerido'}), 400
 
-    if data.get('precio') < 0 or data.get('precio') % 1 != 0:
-        return jsonify({'error': 'el precio no es entero positivo o flotante positivo'}), 400
+    try:
+        precio = float(data['precio'])
+    except ValueError:
+        return jsonify({'error': 'El precio debe ser un número válido'}), 400
+
+    if precio < 0 or precio % 1 != 0:
+        return jsonify({'error': 'el precio no es un número entero positivo'}), 400
 
     mongo.db.products.update_one({'_id': ObjectId(id)}, {'$set': data})
-    product = mongo.db.products.find_one({'_id': ObjectId(id)})
-
-    # Convierte el ObjectId a string
-    product['_id'] = str(product['_id'])
+    updated_product = mongo.db.products.find_one({'_id': ObjectId(id)})
+    updated_product['_id'] = str(updated_product['_id'])
     
-    return jsonify(product)
-
+    return jsonify(updated_product)
 
 @app.route('/product/<id>', methods=['DELETE'])
 def delete_product(id):
@@ -92,4 +102,4 @@ def delete_product(id):
     return jsonify({'error': 'Producto no encontrado'}), 404
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host="0.0.0.0")
