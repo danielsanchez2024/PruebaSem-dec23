@@ -1,18 +1,22 @@
 services:
   api: 
-    image: gopenux/flask-docker-swarm:latest
+    image: danielsanchez18/gopenux-flask-docker-swarm:v1
     environment:
-      DB_URL: "mongodb://database-network:27017/mydb"
+      DB_URL: "mongodb://database:27017/mydb"
     ports:
       - "5000:5000"
-    depends_on:
-      - database
     networks:
-      - network-db
-      - network-nginx
+      network-db:
+        aliases:
+          - api-network
+      network-nginx:
+        aliases:
+          - api
     deploy:
       replicas: 1
- 
+      placement:
+        constraints: 
+          - node.role == manager
 
   database:
     image: mongo:latest
@@ -24,6 +28,11 @@ services:
       network-db:  
         aliases:
           - database-network
+    deploy:
+      replicas: 1
+      placement:
+        constraints: 
+          - node.role == manager
 
   ingress:
     image: nginx:latest
@@ -31,16 +40,20 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
-      - ./nginx/certs:/etc/nginx/ssl
+      - /nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - /nginx/certs:/etc/nginx/ssl
     networks:
       network-nginx:
         aliases:
           - nginx-network 
+    deploy:
+      replicas: 1
+      placement:
+        constraints: 
+          - node.role == worker
 
 networks:
   network-db:
     driver: overlay  
   network-nginx:
     driver: overlay  
-
